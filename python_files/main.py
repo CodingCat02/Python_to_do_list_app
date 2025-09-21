@@ -6,6 +6,7 @@ from tkinter import filedialog
 main = tk.Tk()
 main.title("To Do List")
 main.geometry("500x500")
+main.iconbitmap('icons/notepad.ico')
 
 # Frame
 myFrame = tk.Frame(main)
@@ -79,14 +80,20 @@ def remove_complete_item():
 def toggle_delete_mode():
     global delete_mode, checkboxes, checkbox_frame
 
-    if not delete_mode:  # Enter delete mode
+    if not delete_mode:  
         delete_mode = True
         delete.config(text="Confirm Delete")
 
-        myList.pack_forget()  # Hide original Listbox
+        # Hide all the buttons listbox
+        myEntry.pack_forget()        
+        add.grid_remove()
+        done.grid_remove()
+        undone.grid_remove()
+        
+        myList.pack_forget()  
         checkbox_frame = tk.Frame(myFrame)
         checkbox_frame.pack(side=tk.LEFT, fill=tk.BOTH)
-
+        
         checkboxes = []
         for item in myList.get(0, tk.END):
             var = tk.BooleanVar()
@@ -95,7 +102,7 @@ def toggle_delete_mode():
             checkboxes.append((cb, var))
 
     else:  # Confirm deletion
-        for i in range(len(checkboxes) - 1, -1, -1):  # Reverse order
+        for i in range(len(checkboxes) - 1, -1, -1): 
             cb, var = checkboxes[i]
             if var.get():
                 myList.delete(i)
@@ -108,6 +115,11 @@ def toggle_delete_mode():
         myList.pack(side=tk.LEFT, fill=tk.BOTH)
         delete.config(text="Delete Task")
         delete_mode = False
+        
+        myEntry.pack(pady=20, before=buttonFrame)   
+        add.grid()
+        done.grid()
+        undone.grid()
         
 # Menu functions
 def save_list():
