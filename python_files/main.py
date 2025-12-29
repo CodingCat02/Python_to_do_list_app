@@ -140,7 +140,7 @@ def save_list():
             for i in range(myList.size()):
                 f.write(myList.get(i) + "\n")
                 
-    #Delete completed tasks after saving
+    # NOTE - Delete completed tasks after saving
     count = 0    
     while count < myList.size():
         if myList.itemcget(count, 'fg') == '#dedede':
@@ -151,7 +151,7 @@ def save_list():
 def open_list():
     file_name = filedialog.askopenfilename(
         defaultextension=".txt",
-        title="Open File",
+        title="Open File", 
         filetypes=(
             ("Text Files", "*.txt"),
             ("All Files", "*.*")
