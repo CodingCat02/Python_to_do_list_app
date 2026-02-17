@@ -1,20 +1,36 @@
+import os
+import sys
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 import tkinter as tk
 from tkinter import font
 from tkinter import filedialog
 
-# Main window
+# SECTION - Main window
 main = tk.Tk()
 main.title("To Do List")
 main.geometry("500x500")
+main.resizable(False, False)
+main.configure(bg="SystemButtonFace")
+main.maxsize(500, 500)
+main.minsize(600, 600)
+main.iconbitmap(resource_path("icons/notepad.ico"))
 
-# Frame
+# SECTION - Frame
 myFrame = tk.Frame(main)
 myFrame.pack(pady=10)
 
-# Font
+# SECTION - Font
 myFont = font.Font(family='Helvetica', size=25, weight='bold')
 
-# List Box
+# SECTION - List Box
 myList = tk.Listbox(
     myFrame,
     font=myFont,
@@ -29,28 +45,27 @@ myList = tk.Listbox(
 )
 myList.pack(side=tk.LEFT, fill=tk.BOTH)
 
-# Scroll bar
+# SECTION -Scroll bar
 myScroll = tk.Scrollbar(myFrame)
 myScroll.pack(side=tk.RIGHT, fill=tk.BOTH)
 
 myList.configure(yscrollcommand=myScroll.set)
 myScroll.config(command=myList.yview)
 
-# Entry box
-myEntry = tk.Entry(main, font="Helvetica 24 bold", width=26)
+# SECTION - Entry box
+myEntry = tk.Entry(main, font="Helvetica 24 bold", width=26, bd=3, fg="#464646", bg="SystemButtonFace", highlightthickness=0)
 myEntry.pack(pady=20)
-# myEntry.insert(0, "sample")
 
-# Button frame
+# SECTION - Button frame
 buttonFrame = tk.Frame(main)
 buttonFrame.pack(pady=20)
 
-# Variables
+# SECTION - Variables
 checkboxes = []
 delete_mode = False
 checkbox_frame = None
 
-# Functions
+# SECTION - Functions
 def add_item():
     # myList.insert(tk.END, myEntry.get())
     
@@ -79,14 +94,20 @@ def remove_complete_item():
 def toggle_delete_mode():
     global delete_mode, checkboxes, checkbox_frame
 
-    if not delete_mode:  # Enter delete mode
+    if not delete_mode:  
         delete_mode = True
         delete.config(text="Confirm Delete")
 
-        myList.pack_forget()  # Hide original Listbox
+        # Hide all the buttons listbox
+        myEntry.pack_forget()        
+        add.grid_remove()
+        done.grid_remove()
+        undone.grid_remove()
+        
+        myList.pack_forget()  
         checkbox_frame = tk.Frame(myFrame)
         checkbox_frame.pack(side=tk.LEFT, fill=tk.BOTH)
-
+        
         checkboxes = []
         for item in myList.get(0, tk.END):
             var = tk.BooleanVar()
@@ -95,7 +116,7 @@ def toggle_delete_mode():
             checkboxes.append((cb, var))
 
     else:  # Confirm deletion
-        for i in range(len(checkboxes) - 1, -1, -1):  # Reverse order
+        for i in range(len(checkboxes) - 1, -1, -1): 
             cb, var = checkboxes[i]
             if var.get():
                 myList.delete(i)
@@ -109,7 +130,12 @@ def toggle_delete_mode():
         delete.config(text="Delete Task")
         delete_mode = False
         
-# Menu functions
+        myEntry.pack(pady=20, before=buttonFrame)   
+        add.grid()
+        done.grid()
+        undone.grid()
+        
+# SECTION - Menu functions
 def save_list():
     file_name = filedialog.asksaveasfilename(
         defaultextension=".txt",
@@ -128,7 +154,7 @@ def save_list():
             for i in range(myList.size()):
                 f.write(myList.get(i) + "\n")
                 
-    #Delete completed tasks after saving
+    # NOTE - Delete completed tasks after saving
     count = 0    
     while count < myList.size():
         if myList.itemcget(count, 'fg') == '#dedede':
@@ -139,7 +165,7 @@ def save_list():
 def open_list():
     file_name = filedialog.askopenfilename(
         defaultextension=".txt",
-        title="Open File",
+        title="Open File", 
         filetypes=(
             ("Text Files", "*.txt"),
             ("All Files", "*.*")
@@ -158,27 +184,25 @@ def delete_list():
 my_Menu = tk.Menu(main)
 main.config(menu=my_Menu)
 
-# Menu items
+# SECTION - Menu items
 file_menu = tk.Menu(my_Menu, tearoff=False)
 my_Menu.add_cascade(label="File", menu=file_menu)
 
-# Dropdown items
+# SECTION - Dropdown items
 file_menu.add_command(label="Save List", command=save_list)
 file_menu.add_command(label="Open List", command=open_list)
 file_menu.add_command(label="Clear List", command=delete_list)
 
-# Buttons
-add = tk.Button(buttonFrame, text="Add Task", command=add_item)
-delete = tk.Button(buttonFrame, text="Delete Task", command=toggle_delete_mode)
-done = tk.Button(buttonFrame, text="Mark Complete", command=done_item)
-undone = tk.Button(buttonFrame, text="Undo Mark", command=undone_item)
-# removeComplete = tk.Button(buttonFrame, text="Delete Mark", command=remove_complete_item)
+# SECTION - Buttons
+add = tk.Button(buttonFrame, text="Add Task", command=add_item, bg="#cce6ff", fg="#000000", activebackground="#99ccff", activeforeground="#000000")
+delete = tk.Button(buttonFrame, text="Delete Task", command=toggle_delete_mode, bg="#ff9999", fg="#000000", activebackground="#ff6666", activeforeground="#000000")
+done = tk.Button(buttonFrame, text="Mark Complete", command=done_item, bg="#99ff99", fg="#000000", activebackground="#66ff66", activeforeground="#000000")
+undone = tk.Button(buttonFrame, text="Undo Mark", command=undone_item, bg="#ffcc99", fg="#000000", activebackground="#ffb366", activeforeground="#000000")
 
 add.grid(row=0, column=1, padx=20)
 delete.grid(row=0, column=0)
 done.grid(row=0, column=2)
 undone.grid(row=0, column=3, padx=20)
-# removeComplete.grid(row=0, column=4, padx=20)
 
 # Run app
 main.mainloop()
