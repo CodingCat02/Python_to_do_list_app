@@ -1,3 +1,14 @@
+import os
+import sys
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 import tkinter as tk
 from tkinter import font
 from tkinter import filedialog
@@ -10,7 +21,7 @@ main.resizable(False, False)
 main.configure(bg="SystemButtonFace")
 main.maxsize(500, 500)
 main.minsize(600, 600)
-main.iconbitmap('icons/notepad.ico')
+main.iconbitmap(resource_path("icons/notepad.ico"))
 
 # SECTION - Frame
 myFrame = tk.Frame(main)
