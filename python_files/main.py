@@ -23,17 +23,18 @@ def resource_path(relative_path):
 # ============================
 main = tk.Tk()
 main.title("To Do List")
-main.geometry("500x500")
 main.resizable(False, False)
 main.configure(bg="SystemButtonFace")
-main.maxsize(500, 500)
-main.minsize(600, 600)  # Note: minsize > geometry; may cause issues
+main.geometry("600x600")
+main.minsize(600, 600)
+main.maxsize(600, 600) 
 main.iconbitmap(resource_path("icons/notepad.ico"))
 
 # ============================
 # SECTION - Frames
 # ============================
-myFrame = tk.Frame(main)
+myFrame = tk.Frame(main, width=550, height=350) 
+myFrame.pack_propagate(False) 
 myFrame.pack(pady=10)
 
 buttonFrame = tk.Frame(main)
@@ -42,16 +43,19 @@ buttonFrame.pack(pady=20)
 # ============================
 # SECTION - Font
 # ============================
-myFont = font.Font(family='Helvetica', size=25, weight='bold')
+myFont = font.Font(family='Helvetica', size=12, weight='bold')
 
 # ============================
-# SECTION - Listbox and Scrollbar
+# SECTION - Listbox with X & Y Scrollbars (CORRECT)
 # ============================
+myFrame.grid_rowconfigure(0, weight=1)
+myFrame.grid_columnconfigure(0, weight=1)
+
 myList = tk.Listbox(
     myFrame,
     font=myFont,
-    width=25,
-    height=5,
+    width=55,     
+    height=20,
     bd=0,
     fg="#464646",
     bg="SystemButtonFace",
@@ -59,27 +63,34 @@ myList = tk.Listbox(
     selectbackground="#a6a6a6",
     activestyle="none"
 )
-myList.pack(side=tk.LEFT, fill=tk.BOTH)
+# Place Listbox in the top-left cell
+myList.grid(row=0, column=0, sticky="nsew")
+myList.bind('<Double-1>', lambda event: [done_item(), update_status()])
 
-myScroll = tk.Scrollbar(myFrame)
-myScroll.pack(side=tk.RIGHT, fill=tk.BOTH)
+# Create Scrollbars
+y_scroll = tk.Scrollbar(myFrame, orient=tk.VERTICAL, command=myList.yview)
+x_scroll = tk.Scrollbar(myFrame, orient=tk.HORIZONTAL, command=myList.xview)
 
-myList.configure(yscrollcommand=myScroll.set)
-myScroll.config(command=myList.yview)
+# Link Listbox to Scrollbars
+myList.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+
+# Place Scrollbars in the grid (Always visible)
+y_scroll.grid(row=0, column=1, sticky="ns")  # Right side
+x_scroll.grid(row=1, column=0, sticky="ew")  # Bottom side
 
 # ============================
 # SECTION - Entry Box
 # ============================
 myEntry = tk.Entry(
     main, 
-    font="Helvetica 24 bold", 
-    width=26, 
+    font="Helvetica 12 bold", 
+    width=35, 
     bd=3, 
     fg="#464646", 
     bg="SystemButtonFace", 
     highlightthickness=0
 )
-myEntry.pack(pady=20)
+myEntry.pack(pady=10)
 
 # ============================
 # SECTION - Variables
@@ -89,13 +100,42 @@ delete_mode = False
 checkbox_frame = None
 
 # ============================
-# SECTION - Functions
+# SECTION - Status Bar
+# ============================
+status_var = tk.StringVar()
+status_bar = tk.Label(
+    main, 
+    textvariable=status_var, 
+    bd=1, 
+    relief=tk.SUNKEN, 
+    anchor=tk.W, 
+    font="Helvetica 9 italic",
+    pady=2,
+)
+status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+def update_status():
+    total = myList.size()
+    completed = 0
+    # Count tasks based on the "completed" color you chose
+    for i in range(total):
+        if myList.itemcget(i, 'fg') == '#dedede':
+            completed += 1
+    
+    pending = total - completed
+    status_var.set(f" Total Tasks: {total}  |  Pending: {pending}  |  Completed: {completed}")
+
+update_status()
+
+# ============================
+# SECTION - CRUD Functions
 # ============================
 def add_item():
     """Add task from entry to listbox."""
     item_text = myEntry.get().strip()
     if item_text:
         myList.insert(tk.END, item_text)
+        update_status()
     myEntry.delete(0, tk.END)
 
 def done_item():
@@ -103,44 +143,68 @@ def done_item():
     if myList.curselection():
         myList.itemconfig(myList.curselection(), fg="#dedede")
         myList.selection_clear(0, tk.END)
+        update_status()
 
 def undone_item():
     """Undo completed status of selected task."""
     if myList.curselection():
         myList.itemconfig(myList.curselection(), fg="#464646")
         myList.selection_clear(0, tk.END)
-
+        update_status()
+        
 def remove_complete_item():
     """Remove all completed tasks from listbox."""
     for i in range(myList.size() - 1, -1, -1):
         if myList.itemcget(i, 'fg') == '#dedede':
             myList.delete(i)
-
+            update_status()
+    
 def toggle_delete_mode():
-    """
-    Toggle delete mode:
-    - Show checkboxes for tasks
-    - Confirm deletion
-    """
     global delete_mode, checkboxes, checkbox_frame
 
     if not delete_mode:
-        # Enter delete mode
         delete_mode = True
         delete.config(text="Confirm Delete")
 
-        # Hide main widgets
+        # 1. Hide main UI
         myEntry.pack_forget()
         add.grid_remove()
         done.grid_remove()
         undone.grid_remove()
-        myList.pack_forget()
+        myList.grid_remove()
+        y_scroll.grid_remove()
+        x_scroll.grid_remove()
+        
+        delete_canvas = tk.Canvas(myFrame, bg="SystemButtonFace", highlightthickness=0)
+        delete_scrollbar = tk.Scrollbar(myFrame, orient="vertical", command=delete_canvas.yview)
+        checkbox_frame = tk.Frame(delete_canvas, bg="SystemButtonFace")
 
-        # Show checkboxes
-        checkbox_frame = tk.Frame(myFrame)
-        checkbox_frame.pack(side=tk.LEFT, fill=tk.BOTH)
+        delete_canvas.configure(yscrollcommand=delete_scrollbar.set)
+
+        delete_canvas.grid(row=0, column=0, sticky="nsew")
+        delete_scrollbar.grid(row=0, column=1, sticky="ns")
+
+        canvas_window = delete_canvas.create_window((0, 0), window=checkbox_frame, anchor="nw")
+
+        def on_configure(event):
+            delete_canvas.configure(scrollregion=delete_canvas.bbox("all"))
+            delete_canvas.itemconfig(canvas_window, width=event.width)
+
+        checkbox_frame.bind("<Configure>", on_configure)
+
         checkboxes = []
+        select_all_var = tk.BooleanVar()
+        
+        def select_all_action():
+            for _, var in checkboxes:
+                var.set(select_all_var.get())
 
+        tk.Checkbutton(checkbox_frame, text="Select All", variable=select_all_var, 
+                       font="Helvetica 10 bold", command=select_all_action,).pack(fill='x')
+        
+        tk.Frame(checkbox_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill='x', pady=5)
+
+        # 4. Populate tasks
         for item in myList.get(0, tk.END):
             var = tk.BooleanVar()
             cb = tk.Checkbutton(checkbox_frame, text=item, variable=var, font=myFont, anchor="w")
@@ -148,26 +212,26 @@ def toggle_delete_mode():
             checkboxes.append((cb, var))
 
     else:
-        # Confirm deletion
         for i in range(len(checkboxes) - 1, -1, -1):
-            cb, var = checkboxes[i]
+            _, var = checkboxes[i]
             if var.get():
                 myList.delete(i)
+                update_status()
 
-        # Clean up checkbox view
-        for widget in checkbox_frame.winfo_children():
-            widget.destroy()
-        checkbox_frame.pack_forget()
+        for widget in myFrame.winfo_children():
+            if widget != myList and widget != y_scroll and widget != x_scroll:
+                widget.destroy()
 
-        # Restore main view
-        myList.pack(side=tk.LEFT, fill=tk.BOTH)
+        # 6. Restore Main View
+        myList.grid()
+        y_scroll.grid()
+        x_scroll.grid()
         delete.config(text="Delete Task")
         delete_mode = False
-        myEntry.pack(pady=20, before=buttonFrame)
+        myEntry.pack(pady=20, before=buttonFrame)   
         add.grid()
         done.grid()
         undone.grid()
-
 # ============================
 # SECTION - Menu Functions
 # ============================
@@ -206,11 +270,12 @@ def open_list():
         with open(file_name, "r", encoding="utf-8") as f:
             for line in f:
                 myList.insert(tk.END, line.strip())
+                update_status()
 
 def delete_list():
     """Clear all tasks."""
     myList.delete(0, tk.END)
-
+    update_status()
 # ============================
 # SECTION - Menu
 # ============================
