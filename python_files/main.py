@@ -32,6 +32,32 @@ main.maxsize(600, 600)
 main.iconbitmap(resource_path("icons/notepad.ico"))
 
 # ============================
+# SECTION - Center Window
+# ============================
+# 1. Temporarily hide the window so it doesn't "jump" from the corner
+main.withdraw()
+
+# 2. Force Tkinter to calculate window size
+main.update_idletasks()
+
+window_width = 600
+window_height = 600
+
+# 3. Get the actual screen dimension
+screen_width = main.winfo_screenwidth()
+screen_height = main.winfo_screenheight()
+
+# 4. Calculate the center coordinates
+center_x = int(screen_width/2 - window_width / 2)
+center_y = int(screen_height/2 - window_height / 2)
+
+# 5. Apply the geometry
+main.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
+
+# 6. Show the window again now that it's centered
+main.deiconify()
+
+# ============================
 # SECTION - Frames
 # ============================
 myFrame = tk.Frame(main, width=550, height=350) 
@@ -44,7 +70,7 @@ buttonFrame.pack(pady=20)
 # ============================
 # SECTION - Font
 # ============================
-myFont = font.Font(family='Helvetica', size=12, weight='bold')
+myFont = font.Font(family='Helvetica', size=11, weight='bold')
 
 # ============================
 # SECTION - Listbox with X & Y Scrollbars (CORRECT)
@@ -66,7 +92,7 @@ myList = tk.Listbox(
 )
 # Place Listbox in the top-left cell
 myList.grid(row=0, column=0, sticky="nsew")
-myList.bind('<Double-1>', lambda event: [done_item(), update_status()])
+myList.bind('<Double-1>', lambda event: toggle_item_status())
 
 # Create Scrollbars
 y_scroll = tk.Scrollbar(myFrame, orient=tk.VERTICAL, command=myList.yview)
@@ -105,6 +131,8 @@ buttonFrame.pack(pady=5)
 checkboxes = []
 delete_mode = False
 checkbox_frame = None
+current_file_path = None  # Tracks the currently opened/saved file
+is_modified = False       # Tracks if changes were made since last save
 
 # ============================
 # SECTION - Status Bar
@@ -140,40 +168,31 @@ def add_item():
     if item_text:
         myList.insert(tk.END, item_text)
         update_status()
+        mark_modified()
     myEntry.delete(0, tk.END)
 
-def done_item():
-    """Add a checkmark to the selected task and change color."""
-    try:
-        index = myList.curselection()[0]
-        item_text = myList.get(index)
-        
-        if not item_text.startswith("✔ "):
-            new_text = f"✔ {item_text}"
-            myList.delete(index)
-            myList.insert(index, new_text)
-            
-        # Set the "completed" color
-        myList.itemconfig(index, fg="#dedede")
-        myList.selection_clear(0, tk.END)
-        update_status()
-    except IndexError:
-        pass # No item selected
-
-def undone_item():
-    """Remove the checkmark and restore original color."""
+def toggle_item_status():
+    """Toggles the checkmark and color when an item is double-clicked."""
     try:
         index = myList.curselection()[0]
         item_text = myList.get(index)
         
         if item_text.startswith("✔ "):
+            # REMOVE MARK: Remove the first two characters "✔ "
             new_text = item_text[2:] 
             myList.delete(index)
             myList.insert(index, new_text)
+            myList.itemconfig(index, fg="#464646") # Restore original color
+        else:
+            # ADD MARK: Add the checkmark
+            new_text = f"✔ {item_text}"
+            myList.delete(index)
+            myList.insert(index, new_text)
+            myList.itemconfig(index, fg="#dedede") # Set completed color
             
-        myList.itemconfig(index, fg="#464646")
         myList.selection_clear(0, tk.END)
         update_status()
+        mark_modified() # Ensure the * appears in the title
     except IndexError:
         pass
         
@@ -278,52 +297,83 @@ def exit_delete_mode():
     add.grid()
     update_status()
 
-
 # ============================
 # SECTION - Menu Functions
 # ============================
 def save_list():
-    """Save tasks with a default filename containing the current date."""
-   
+    """Save to the existing file path. If none exists, trigger Save As."""
+    global current_file_path, is_modified
+    
+    if current_file_path:
+        try:
+            with open(current_file_path, "w", encoding="utf-8") as f:
+                for i in range(myList.size()):
+                    f.write(myList.get(i) + "\n")
+            is_modified = False
+            update_title()
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror("Error", f"Could not save file: {e}")
+    else:
+        save_as_list()
+
+def save_as_list():
+    """Force the user to choose a new file location."""
+    global current_file_path, is_modified
+    
     current_date = datetime.now().strftime("%Y-%m-%d")
     default_filename = f"task-list-{current_date}"
 
-    file_name = filedialog.asksaveasfilename(
-        initialfile=default_filename, # This sets the default text
+    file_path = filedialog.asksaveasfilename(
+        initialfile=default_filename,
         defaultextension=".txt",
-        title="Save File",
+        title="Save File As",
         filetypes=(("Text Files", "*.txt"), ("All Files", "*.*"))
     )
 
-    if file_name:
-        with open(file_name, "w", encoding="utf-8") as f:
-            for i in range(myList.size()):
-                f.write(myList.get(i) + "\n")
+    if file_path:
+        current_file_path = file_path
+        save_list() # Reuse the logic above
 
 def open_list():
-    """Open tasks from a text file and apply styling to completed tasks."""
-    file_name = filedialog.askopenfilename(
+    global current_file_path, is_modified
+    file_path = filedialog.askopenfilename(
         defaultextension=".txt",
-        title="Open File",
         filetypes=(("Text Files", "*.txt"), ("All Files", "*.*"))
     )
-    if file_name:
+    if file_path:
         myList.delete(0, tk.END)
-        with open(file_name, "r", encoding="utf-8") as f:
+        current_file_path = file_path
+        with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
                 task = line.strip()
                 if task:
                     myList.insert(tk.END, task)
-                    # Check if the task we just added starts with the icon
                     if task.startswith("✔ "):
-                        # myList.size() - 1 gets the index of the task we just inserted
                         myList.itemconfig(tk.END, fg="#dedede")
+        is_modified = False
+        update_title()
         update_status()
 
 def delete_list():
     """Clear all tasks."""
     myList.delete(0, tk.END)
     update_status()
+    
+def mark_modified():
+    global is_modified
+    is_modified = True
+    update_title()
+
+def update_title():
+    title = "To Do List"
+    if current_file_path:
+        # Show just the filename, not the full path
+        file_name = os.path.basename(current_file_path)
+        title += f" - {file_name}"
+    if is_modified:
+        title += " *"
+    main.title(title)
 # ============================
 # SECTION - Menu
 # ============================
@@ -332,8 +382,10 @@ main.config(menu=my_Menu)
 
 file_menu = tk.Menu(my_Menu, tearoff=False)
 my_Menu.add_cascade(label="File", menu=file_menu)
-file_menu.add_command(label="Save List", command=save_list)
 file_menu.add_command(label="Open List", command=open_list)
+file_menu.add_command(label="Save", command=save_list) # Quick save / overwrite
+file_menu.add_command(label="Save As...", command=save_as_list) # New file
+file_menu.add_separator()
 file_menu.add_command(label="Clear List", command=delete_list)
 
 # ============================
@@ -365,7 +417,24 @@ add.grid(row=0, column=1, padx=20)
 delete.grid(row=0, column=0)
 # done.grid(row=0, column=2)
 # undone.grid(row=0, column=2)
+# ============================
+# SECTION - Input Validation & Tracers
+# ============================
+def check_entry(*args):
+    """Enables/Disables Add button based on text content."""
+    if myEntry.get().strip():
+        add.config(state=tk.NORMAL)
+    else:
+        add.config(state=tk.DISABLED)
 
+# Link the entry box to the validation function
+entry_var = tk.StringVar()
+myEntry.config(textvariable=entry_var)
+entry_var.trace_add("write", check_entry)
+
+# Set initial state
+add.config(state=tk.DISABLED)
+update_status()
 # ============================
 # SECTION - Run Application
 # ============================
