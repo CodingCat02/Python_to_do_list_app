@@ -22,6 +22,7 @@ delete_mode = False
 checkbox_frame = None
 current_file_path = None
 is_modified = False
+cancel_btn = None 
 
 # ============================
 # SECTION - Functions
@@ -77,17 +78,14 @@ def toggle_item_status():
     except IndexError:
         pass
 
-def remove_complete_item():
-    for i in range(myList.size() - 1, -1, -1):
-        if myList.itemcget(i, 'fg') == '#dedede':
-            myList.delete(i)
-            update_status()
-
 def exit_delete_mode():
-    global delete_mode
+    global delete_mode, cancel_btn
     for widget in myFrame.winfo_children():
         if widget not in [myList, y_scroll, x_scroll]:
             widget.destroy()
+    if cancel_btn:
+        cancel_btn.destroy()
+        cancel_btn = None
     myList.grid()
     y_scroll.grid()
     x_scroll.grid()
@@ -138,10 +136,14 @@ def toggle_delete_mode():
             cb.pack(fill='x', padx=20)
             checkboxes.append((cb, var))
     else:
+        deleted_anything = False
         for i in range(len(checkboxes) - 1, -1, -1):
             _, var = checkboxes[i]
             if var.get():
                 myList.delete(i)
+                deleted_anything = True
+        if deleted_anything:
+            mark_modified()
         exit_delete_mode()
 
 def save_list(event=None):
@@ -185,8 +187,12 @@ def open_list():
         update_status()
 
 def delete_list():
-    myList.delete(0, tk.END)
-    update_status()
+    """Clear all tasks with a confirmation."""
+    if myList.size() > 0:
+        if messagebox.askyesno("Clear List", "Are you sure you want to delete all tasks?"):
+            myList.delete(0, tk.END)
+            mark_modified()
+            update_status()
 
 def on_closing():
     global is_modified
@@ -210,8 +216,6 @@ main.withdraw()
 main.title("To Do List")
 main.resizable(False, False)
 main.configure(bg="SystemButtonFace")
-
-# Center Calculation
 main.update_idletasks()
 window_width, window_height = 600, 600
 screen_width = main.winfo_screenwidth()
@@ -232,11 +236,9 @@ main.deiconify()
 # SECTION - UI Elements
 # ============================
 myFont = font.Font(family='Helvetica', size=11, weight='bold')
-
 myFrame = tk.Frame(main, width=550, height=350) 
 myFrame.pack_propagate(False) 
 myFrame.pack(pady=10)
-
 myFrame.grid_rowconfigure(0, weight=1)
 myFrame.grid_columnconfigure(0, weight=1)
 
@@ -251,10 +253,8 @@ x_scroll.grid(row=1, column=0, sticky="ew")
 
 bottom_container = tk.Frame(main)
 bottom_container.pack(pady=5)
-
 myEntry = tk.Entry(bottom_container, font="Helvetica 12 bold", width=35, bd=3, fg="#464646", bg="SystemButtonFace", highlightthickness=0)
 myEntry.pack(pady=10)
-
 buttonFrame = tk.Frame(bottom_container)
 buttonFrame.pack(pady=5) 
 
@@ -277,7 +277,8 @@ my_Menu.add_cascade(label="File", menu=file_menu)
 file_menu.add_command(label="Open List", command=open_list)
 file_menu.add_command(label="Save", command=save_list, accelerator="Ctrl+S")
 file_menu.add_command(label="Save As...", command=save_as_list)
-file_menu.add_separator() 
+file_menu.add_separator()
+file_menu.add_command(label="Clear List", command=delete_list) # RESTORED HERE
 
 main.bind('<Control-s>', save_list)
 main.bind('<Control-S>', save_list)
