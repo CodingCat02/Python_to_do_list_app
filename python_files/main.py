@@ -50,10 +50,29 @@ def update_status():
     pending = total - completed
     status_var.set(f" Total Tasks: {total}  |  Pending: {pending}  |  Completed: {completed}")
 
+def add_header():
+    """Add a ToDew-style category header."""
+    item_text = myEntry.get().strip()
+    if item_text:
+        # Force Uppercase and add ToDew styling
+        header_text = f"--- {item_text.upper()} ---"
+        myList.insert(tk.END, header_text)
+        
+        # Color the header specifically (Bold Black/Dark)
+        last_index = myList.size() - 1
+        myList.itemconfig(last_index, fg="#000000")
+        
+        update_status()
+        mark_modified()
+    myEntry.delete(0, tk.END)
+
 def add_item(event=None):
     item_text = myEntry.get().strip()
     if item_text:
-        myList.insert(tk.END, item_text)
+        formatted_task = f"    {item_text}"
+        myList.insert(tk.END, formatted_task)
+        myList.itemconfig(tk.END, fg="#464646")
+        
         update_status()
         mark_modified()
     myEntry.delete(0, tk.END)
@@ -62,16 +81,24 @@ def toggle_item_status():
     try:
         index = myList.curselection()[0]
         item_text = myList.get(index)
-        if item_text.startswith("✔ "):
-            new_text = item_text[2:] 
+        
+        if item_text.lstrip().startswith("---"):
+            return 
+
+        if "✔" in item_text:
+            # Remove the checkmark but keep the 4 spaces
+            new_text = item_text.replace("✔ ", "")
             myList.delete(index)
             myList.insert(index, new_text)
             myList.itemconfig(index, fg="#464646")
         else:
-            new_text = f"✔ {item_text}"
+            # Insert the checkmark after the initial indent
+            # Logic: keep the 4 spaces, then add '✔ '
+            new_text = item_text.replace("    ", "    ✔ ")
             myList.delete(index)
             myList.insert(index, new_text)
             myList.itemconfig(index, fg="#dedede")
+            
         myList.selection_clear(0, tk.END)
         update_status()
         mark_modified()
@@ -93,6 +120,9 @@ def exit_delete_mode():
     delete.config(text="Delete Task", state=tk.NORMAL)
     myEntry.pack(pady=10, before=buttonFrame)
     add.grid()
+    move_up_btn.grid()
+    move_down_btn.grid()
+    header.grid()
     update_status()
 
 def toggle_delete_mode():
@@ -102,6 +132,9 @@ def toggle_delete_mode():
         delete.config(text="Confirm Delete", state=tk.DISABLED)
         myEntry.pack_forget()
         add.grid_remove()
+        move_up_btn.grid_remove()
+        move_down_btn.grid_remove()
+        header.grid_remove()
         myList.grid_remove()
         y_scroll.grid_remove()
         x_scroll.grid_remove()
@@ -177,11 +210,20 @@ def open_list():
         current_file_path = file_path
         with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
-                task = line.strip()
-                if task:
+                # We only remove the newline character to keep the leading spaces
+                task = line.rstrip("\n") 
+                if task.strip(): # Only process if there's actual text
                     myList.insert(tk.END, task)
-                    if task.startswith("✔ "):
-                        myList.itemconfig(tk.END, fg="#dedede")
+                    
+                    clean_task = task.lstrip() 
+                    
+                    if clean_task.startswith("---"):
+                        myList.itemconfig(tk.END, fg="#000000") # Headers stay black
+                    elif clean_task.startswith("✔ "):
+                        myList.itemconfig(tk.END, fg="#dedede") # Completed tasks fade
+                    else:
+                        myList.itemconfig(tk.END, fg="#464646") # Normal tasks
+        
         is_modified = False
         update_title()
         update_status()
@@ -205,9 +247,38 @@ def on_closing():
 def check_entry(*args):
     if myEntry.get().strip():
         add.config(state=tk.NORMAL)
+        header.config(state=tk.NORMAL)
     else:
         add.config(state=tk.DISABLED)
+        header.config(state=tk.DISABLED)
 
+def move_up():
+    try:
+        index = myList.curselection()[0]
+        if index > 0:
+            text = myList.get(index)
+            color = myList.itemcget(index, 'fg')
+            myList.delete(index)
+            myList.insert(index - 1, text)
+            myList.itemconfig(index - 1, fg=color)
+            myList.selection_set(index - 1)
+            mark_modified()
+    except IndexError:
+        pass
+
+def move_down():
+    try:
+        index = myList.curselection()[0]
+        if index < myList.size() - 1:
+            text = myList.get(index)
+            color = myList.itemcget(index, 'fg')
+            myList.delete(index)
+            myList.insert(index + 1, text)
+            myList.itemconfig(index + 1, fg=color)
+            myList.selection_set(index + 1)
+            mark_modified()
+    except IndexError:
+        pass
 # ============================
 # SECTION - Main Window Setup
 # ============================
@@ -258,10 +329,17 @@ myEntry.pack(pady=10)
 buttonFrame = tk.Frame(bottom_container)
 buttonFrame.pack(pady=5) 
 
-add = tk.Button(buttonFrame, text="Add Task", command=add_item, bg="#cce6ff", fg="#000000")
 delete = tk.Button(buttonFrame, text="Delete Task", command=toggle_delete_mode, bg="#ff9999", fg="#000000")
-add.grid(row=0, column=1, padx=20)
-delete.grid(row=0, column=0)
+header = tk.Button(buttonFrame, text="Add As Header", command=add_header, bg="#e0e0e0", fg="#000000")
+add = tk.Button(buttonFrame, text="Add Task", command=add_item, bg="#cce6ff", fg="#000000")
+move_up_btn = tk.Button(buttonFrame, text="▲", command=move_up, bg="#f0f0f0", width=2)
+move_down_btn = tk.Button(buttonFrame, text="▼", command=move_down, bg="#f0f0f0", width=2)
+
+delete.grid(row=0, column=0, padx=2)
+header.grid(row=0, column=1, padx=2)
+add.grid(row=0, column=2, padx=2)
+move_up_btn.grid(row=0, column=3, padx=2)
+move_down_btn.grid(row=0, column=4, padx=2)
 
 status_var = tk.StringVar()
 status_bar = tk.Label(main, textvariable=status_var, bd=1, relief=tk.SUNKEN, anchor=tk.W, font="Helvetica 9 italic", pady=2)
@@ -290,6 +368,7 @@ myEntry.config(textvariable=entry_var)
 entry_var.trace_add("write", check_entry)
 
 add.config(state=tk.DISABLED)
+header.config(state=tk.DISABLED)
 update_status()
 
 main.mainloop()
