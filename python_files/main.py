@@ -44,11 +44,21 @@ def mark_modified():
 def update_status():
     total = myList.size()
     completed = 0
+    headers = 0
+    
     for i in range(total):
-        if myList.get(i).startswith("✔ "):
+        item = myList.get(i)
+        
+        if "---" in item:
+            headers += 1
+        elif "✔" in item:
             completed += 1
-    pending = total - completed
-    status_var.set(f" Total Tasks: {total}  |  Pending: {pending}  |  Completed: {completed}")
+    
+    actual_tasks = total - headers
+    if actual_tasks < 0: actual_tasks = 0
+    
+    pending = actual_tasks - completed
+    status_var.set(f" Tasks: {actual_tasks}  |  Pending: {pending}  |  Completed: {completed}")
 
 def add_header():
     """Add a ToDew-style category header."""
