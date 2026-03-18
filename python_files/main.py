@@ -1,209 +1,384 @@
 import os
 import sys
+import tkinter as tk
+from tkinter import font, filedialog, messagebox
+from datetime import datetime
 
+# ============================
+# SECTION - Resource Path
+# ============================
 def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
-
     return os.path.join(base_path, relative_path)
 
-import tkinter as tk
-from tkinter import font
-from tkinter import filedialog
-
-# SECTION - Main window
-main = tk.Tk()
-main.title("To Do List")
-main.geometry("500x500")
-main.resizable(False, False)
-main.configure(bg="SystemButtonFace")
-main.maxsize(500, 500)
-main.minsize(600, 600)
-main.iconbitmap(resource_path("icons/notepad.ico"))
-
-# SECTION - Frame
-myFrame = tk.Frame(main)
-myFrame.pack(pady=10)
-
-# SECTION - Font
-myFont = font.Font(family='Helvetica', size=25, weight='bold')
-
-# SECTION - List Box
-myList = tk.Listbox(
-    myFrame,
-    font=myFont,
-    width=25,
-    height=5,
-    bd=0,
-    fg="#464646",
-    bg="SystemButtonFace",
-    highlightthickness=0,
-    selectbackground="#a6a6a6",
-    activestyle="none"
-)
-myList.pack(side=tk.LEFT, fill=tk.BOTH)
-
-# SECTION -Scroll bar
-myScroll = tk.Scrollbar(myFrame)
-myScroll.pack(side=tk.RIGHT, fill=tk.BOTH)
-
-myList.configure(yscrollcommand=myScroll.set)
-myScroll.config(command=myList.yview)
-
-# SECTION - Entry box
-myEntry = tk.Entry(main, font="Helvetica 24 bold", width=26, bd=3, fg="#464646", bg="SystemButtonFace", highlightthickness=0)
-myEntry.pack(pady=20)
-
-# SECTION - Button frame
-buttonFrame = tk.Frame(main)
-buttonFrame.pack(pady=20)
-
-# SECTION - Variables
+# ============================
+# SECTION - Global Variables
+# ============================
 checkboxes = []
 delete_mode = False
 checkbox_frame = None
+current_file_path = None
+is_modified = False
+cancel_btn = None 
 
+# ============================
 # SECTION - Functions
-def add_item():
-    # myList.insert(tk.END, myEntry.get())
+# ============================
+def update_title():
+    title = "To Do List"
+    if current_file_path:
+        file_name = os.path.basename(current_file_path)
+        title += f" - {file_name}"
+    if is_modified:
+        title += " *"
+    main.title(title)
+
+def mark_modified():
+    global is_modified
+    is_modified = True
+    update_title()
+
+def update_status():
+    total = myList.size()
+    completed = 0
+    headers = 0
     
-    emptyText = myEntry.get().strip()
-    if emptyText:
-        myList.insert(tk.END, emptyText)
+    for i in range(total):
+        item = myList.get(i)
+        
+        if "---" in item:
+            headers += 1
+        elif "✔" in item:
+            completed += 1
+    
+    actual_tasks = total - headers
+    if actual_tasks < 0: actual_tasks = 0
+    
+    pending = actual_tasks - completed
+    status_var.set(f" Tasks: {actual_tasks}  |  Pending: {pending}  |  Completed: {completed}")
+
+def add_header():
+    """Add a ToDew-style category header."""
+    item_text = myEntry.get().strip()
+    if item_text:
+        # Force Uppercase and add ToDew styling
+        header_text = f"--- {item_text.upper()} ---"
+        myList.insert(tk.END, header_text)
+        
+        # Color the header specifically (Bold Black/Dark)
+        last_index = myList.size() - 1
+        myList.itemconfig(last_index, fg="#000000")
+        
+        update_status()
+        mark_modified()
     myEntry.delete(0, tk.END)
-    
-def done_item():
-    if not myList.curselection():
-        return
-    myList.itemconfig(myList.curselection(), fg="#dedede")
-    myList.selection_clear(0, tk.END)
 
-def undone_item():
-    if not myList.curselection():
-        return
-    myList.itemconfig(myList.curselection(), fg="#464646")
-    myList.selection_clear(0, tk.END)
+def add_item(event=None):
+    item_text = myEntry.get().strip()
+    if item_text:
+        formatted_task = f"    {item_text}"
+        myList.insert(tk.END, formatted_task)
+        myList.itemconfig(tk.END, fg="#464646")
+        
+        update_status()
+        mark_modified()
+    myEntry.delete(0, tk.END)
 
-def remove_complete_item():
-    for i in range(myList.size() - 1, -1, -1):
-        if myList.itemcget(i, 'fg') == '#dedede':
-            myList.delete(i)
+def toggle_item_status():
+    try:
+        index = myList.curselection()[0]
+        item_text = myList.get(index)
+        
+        if item_text.lstrip().startswith("---"):
+            return 
+
+        if "✔" in item_text:
+            # Remove the checkmark but keep the 4 spaces
+            new_text = item_text.replace("✔ ", "")
+            myList.delete(index)
+            myList.insert(index, new_text)
+            myList.itemconfig(index, fg="#464646")
+        else:
+            # Insert the checkmark after the initial indent
+            # Logic: keep the 4 spaces, then add '✔ '
+            new_text = item_text.replace("    ", "    ✔ ")
+            myList.delete(index)
+            myList.insert(index, new_text)
+            myList.itemconfig(index, fg="#dedede")
+            
+        myList.selection_clear(0, tk.END)
+        update_status()
+        mark_modified()
+    except IndexError:
+        pass
+
+def exit_delete_mode():
+    global delete_mode, cancel_btn
+    for widget in myFrame.winfo_children():
+        if widget not in [myList, y_scroll, x_scroll]:
+            widget.destroy()
+    if cancel_btn:
+        cancel_btn.destroy()
+        cancel_btn = None
+    myList.grid()
+    y_scroll.grid()
+    x_scroll.grid()
+    delete_mode = False
+    delete.config(text="Delete Task", state=tk.NORMAL)
+    myEntry.pack(pady=10, before=buttonFrame)
+    add.grid()
+    move_up_btn.grid()
+    move_down_btn.grid()
+    header.grid()
+    update_status()
 
 def toggle_delete_mode():
-    global delete_mode, checkboxes, checkbox_frame
-
-    if not delete_mode:  
+    global delete_mode, checkboxes, checkbox_frame, cancel_btn
+    if not delete_mode:
         delete_mode = True
-        delete.config(text="Confirm Delete")
-
-        # Hide all the buttons listbox
-        myEntry.pack_forget()        
+        delete.config(text="Confirm Delete", state=tk.DISABLED)
+        myEntry.pack_forget()
         add.grid_remove()
-        done.grid_remove()
-        undone.grid_remove()
-        
-        myList.pack_forget()  
-        checkbox_frame = tk.Frame(myFrame)
-        checkbox_frame.pack(side=tk.LEFT, fill=tk.BOTH)
-        
+        move_up_btn.grid_remove()
+        move_down_btn.grid_remove()
+        header.grid_remove()
+        myList.grid_remove()
+        y_scroll.grid_remove()
+        x_scroll.grid_remove()
+        cancel_btn = tk.Button(buttonFrame, text="Cancel", command=exit_delete_mode, bg="#d3d3d3", fg="#000000")
+        cancel_btn.grid(row=0, column=2, padx=10)
+        delete_canvas = tk.Canvas(myFrame, bg="SystemButtonFace", highlightthickness=0)
+        delete_scrollbar = tk.Scrollbar(myFrame, orient="vertical", command=delete_canvas.yview)
+        checkbox_frame = tk.Frame(delete_canvas, bg="SystemButtonFace")
+        delete_canvas.configure(yscrollcommand=delete_scrollbar.set)
+        delete_canvas.grid(row=0, column=0, sticky="nsew")
+        delete_scrollbar.grid(row=0, column=1, sticky="ns")
+        canvas_window = delete_canvas.create_window((0, 0), window=checkbox_frame, anchor="nw")
+        def on_configure(event):
+            delete_canvas.configure(scrollregion=delete_canvas.bbox("all"))
+            delete_canvas.itemconfig(canvas_window, width=event.width)
+        checkbox_frame.bind("<Configure>", on_configure)
         checkboxes = []
+        def update_confirm_button(*args):
+            any_checked = any(var.get() for _, var in checkboxes)
+            delete.config(state=tk.NORMAL if any_checked else tk.DISABLED)
+        select_all_var = tk.BooleanVar()
+        def select_all_action():
+            for _, var in checkboxes:
+                var.set(select_all_var.get())
+            update_confirm_button()
+        tk.Checkbutton(checkbox_frame, text="Select All", variable=select_all_var, font="Helvetica 10 bold", command=select_all_action).pack(fill='x', padx=20)
+        tk.Frame(checkbox_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill='x', pady=5, padx=20)
         for item in myList.get(0, tk.END):
             var = tk.BooleanVar()
+            var.trace_add("write", update_confirm_button)
             cb = tk.Checkbutton(checkbox_frame, text=item, variable=var, font=myFont, anchor="w")
-            cb.pack(fill='x')
+            cb.pack(fill='x', padx=20)
             checkboxes.append((cb, var))
-
-    else:  # Confirm deletion
-        for i in range(len(checkboxes) - 1, -1, -1): 
-            cb, var = checkboxes[i]
+    else:
+        deleted_anything = False
+        for i in range(len(checkboxes) - 1, -1, -1):
+            _, var = checkboxes[i]
             if var.get():
                 myList.delete(i)
+                deleted_anything = True
+        if deleted_anything:
+            mark_modified()
+        exit_delete_mode()
 
-        # Clean up checkbox view
-        for widget in checkbox_frame.winfo_children():
-            widget.destroy()
-        checkbox_frame.pack_forget()
+def save_list(event=None):
+    global current_file_path, is_modified
+    if current_file_path:
+        try:
+            with open(current_file_path, "w", encoding="utf-8") as f:
+                for i in range(myList.size()):
+                    f.write(myList.get(i) + "\n")
+            is_modified = False
+            update_title()
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not save file: {e}")
+    else:
+        save_as_list()
 
-        myList.pack(side=tk.LEFT, fill=tk.BOTH)
-        delete.config(text="Delete Task")
-        delete_mode = False
-        
-        myEntry.pack(pady=20, before=buttonFrame)   
-        add.grid()
-        done.grid()
-        undone.grid()
-        
-# SECTION - Menu functions
-def save_list():
-    file_name = filedialog.asksaveasfilename(
-        defaultextension=".txt",
-        title="Save File",
-        filetypes=(
-            ("Text Files", "*.txt"),
-            ("All Files", "*.*")
-        )
-    )
+def save_as_list():
+    global current_file_path
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    default_filename = f"task-list-{current_date}"
+    file_path = filedialog.asksaveasfilename(initialfile=default_filename, defaultextension=".txt", title="Save File As", filetypes=(("Text Files", "*.txt"), ("All Files", "*.*")))
+    if file_path:
+        current_file_path = file_path
+        save_list()
 
-    if file_name:  
-        if not file_name.endswith(".txt"): 
-            file_name = f"{file_name}.txt"
-
-        with open(file_name, "w", encoding="utf-8") as f:
-            for i in range(myList.size()):
-                f.write(myList.get(i) + "\n")
-                
-    # NOTE - Delete completed tasks after saving
-    count = 0    
-    while count < myList.size():
-        if myList.itemcget(count, 'fg') == '#dedede':
-            myList.delete(myList.index(count))
-        else:
-            count += 1
-             
 def open_list():
-    file_name = filedialog.askopenfilename(
-        defaultextension=".txt",
-        title="Open File", 
-        filetypes=(
-            ("Text Files", "*.txt"),
-            ("All Files", "*.*")
-        )
-    )
-    # Clear current list
-    if file_name:
-        myList.delete(0, tk.END)  
-        with open(file_name, "r", encoding="utf-8") as f:
+    global current_file_path, is_modified
+    file_path = filedialog.askopenfilename(defaultextension=".txt", filetypes=(("Text Files", "*.txt"), ("All Files", "*.*")))
+    if file_path:
+        myList.delete(0, tk.END)
+        current_file_path = file_path
+        with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
-                myList.insert(tk.END, line.strip())
+                # We only remove the newline character to keep the leading spaces
+                task = line.rstrip("\n") 
+                if task.strip(): # Only process if there's actual text
+                    myList.insert(tk.END, task)
+                    
+                    clean_task = task.lstrip() 
+                    
+                    if clean_task.startswith("---"):
+                        myList.itemconfig(tk.END, fg="#000000") # Headers stay black
+                    elif clean_task.startswith("✔ "):
+                        myList.itemconfig(tk.END, fg="#dedede") # Completed tasks fade
+                    else:
+                        myList.itemconfig(tk.END, fg="#464646") # Normal tasks
         
-def delete_list():
-    myList.delete(0, tk.END)
+        is_modified = False
+        update_title()
+        update_status()
 
+def delete_list():
+    """Clear all tasks with a confirmation."""
+    if myList.size() > 0:
+        if messagebox.askyesno("Clear List", "Are you sure you want to delete all tasks?"):
+            myList.delete(0, tk.END)
+            mark_modified()
+            update_status()
+
+def on_closing():
+    global is_modified
+    if is_modified:
+        if messagebox.askyesno("Unsaved Changes", "You have unsaved changes. Do you really want to quit?"):
+            main.destroy()
+    else:
+        main.destroy()
+
+def check_entry(*args):
+    if myEntry.get().strip():
+        add.config(state=tk.NORMAL)
+        header.config(state=tk.NORMAL)
+    else:
+        add.config(state=tk.DISABLED)
+        header.config(state=tk.DISABLED)
+
+def move_up():
+    try:
+        index = myList.curselection()[0]
+        if index > 0:
+            text = myList.get(index)
+            color = myList.itemcget(index, 'fg')
+            myList.delete(index)
+            myList.insert(index - 1, text)
+            myList.itemconfig(index - 1, fg=color)
+            myList.selection_set(index - 1)
+            mark_modified()
+    except IndexError:
+        pass
+
+def move_down():
+    try:
+        index = myList.curselection()[0]
+        if index < myList.size() - 1:
+            text = myList.get(index)
+            color = myList.itemcget(index, 'fg')
+            myList.delete(index)
+            myList.insert(index + 1, text)
+            myList.itemconfig(index + 1, fg=color)
+            myList.selection_set(index + 1)
+            mark_modified()
+    except IndexError:
+        pass
+# ============================
+# SECTION - Main Window Setup
+# ============================
+main = tk.Tk()
+main.withdraw()
+main.title("To Do List")
+main.resizable(False, False)
+main.configure(bg="SystemButtonFace")
+main.update_idletasks()
+window_width, window_height = 600, 600
+screen_width = main.winfo_screenwidth()
+screen_height = main.winfo_screenheight()
+center_x = int(screen_width/2 - window_width / 2)
+center_y = int(screen_height/2 - window_height / 2)
+main.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
+main.protocol("WM_DELETE_WINDOW", on_closing)
+
+try:
+    main.iconbitmap(resource_path("icons/notepad.ico"))
+except:
+    pass
+
+main.deiconify()
+
+# ============================
+# SECTION - UI Elements
+# ============================
+myFont = font.Font(family='Helvetica', size=11, weight='bold')
+myFrame = tk.Frame(main, width=550, height=350) 
+myFrame.pack_propagate(False) 
+myFrame.pack(pady=10)
+myFrame.grid_rowconfigure(0, weight=1)
+myFrame.grid_columnconfigure(0, weight=1)
+
+myList = tk.Listbox(myFrame, font=myFont, width=55, height=20, bd=0, fg="#464646", bg="SystemButtonFace", highlightthickness=0, selectbackground="#a6a6a6", activestyle="none")
+myList.grid(row=0, column=0, sticky="nsew")
+
+y_scroll = tk.Scrollbar(myFrame, orient=tk.VERTICAL, command=myList.yview)
+x_scroll = tk.Scrollbar(myFrame, orient=tk.HORIZONTAL, command=myList.xview)
+myList.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+y_scroll.grid(row=0, column=1, sticky="ns")
+x_scroll.grid(row=1, column=0, sticky="ew")
+
+bottom_container = tk.Frame(main)
+bottom_container.pack(pady=5)
+myEntry = tk.Entry(bottom_container, font="Helvetica 12 bold", width=35, bd=3, fg="#464646", bg="SystemButtonFace", highlightthickness=0)
+myEntry.pack(pady=10)
+buttonFrame = tk.Frame(bottom_container)
+buttonFrame.pack(pady=5) 
+
+delete = tk.Button(buttonFrame, text="Delete Task", command=toggle_delete_mode, bg="#ff9999", fg="#000000")
+header = tk.Button(buttonFrame, text="Add As Header", command=add_header, bg="#e0e0e0", fg="#000000")
+add = tk.Button(buttonFrame, text="Add Task", command=add_item, bg="#cce6ff", fg="#000000")
+move_up_btn = tk.Button(buttonFrame, text="▲", command=move_up, bg="#f0f0f0", width=2)
+move_down_btn = tk.Button(buttonFrame, text="▼", command=move_down, bg="#f0f0f0", width=2)
+
+delete.grid(row=0, column=0, padx=2)
+header.grid(row=0, column=1, padx=2)
+add.grid(row=0, column=2, padx=2)
+move_up_btn.grid(row=0, column=3, padx=2)
+move_down_btn.grid(row=0, column=4, padx=2)
+
+status_var = tk.StringVar()
+status_bar = tk.Label(main, textvariable=status_var, bd=1, relief=tk.SUNKEN, anchor=tk.W, font="Helvetica 9 italic", pady=2)
+status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+# ============================
+# SECTION - Menu & Bindings
+# ============================
 my_Menu = tk.Menu(main)
 main.config(menu=my_Menu)
-
-# SECTION - Menu items
 file_menu = tk.Menu(my_Menu, tearoff=False)
 my_Menu.add_cascade(label="File", menu=file_menu)
-
-# SECTION - Dropdown items
-file_menu.add_command(label="Save List", command=save_list)
 file_menu.add_command(label="Open List", command=open_list)
-file_menu.add_command(label="Clear List", command=delete_list)
+file_menu.add_command(label="Save", command=save_list, accelerator="Ctrl+S")
+file_menu.add_command(label="Save As...", command=save_as_list)
+file_menu.add_separator()
+file_menu.add_command(label="Clear List", command=delete_list) # RESTORED HERE
 
-# SECTION - Buttons
-add = tk.Button(buttonFrame, text="Add Task", command=add_item, bg="#cce6ff", fg="#000000", activebackground="#99ccff", activeforeground="#000000")
-delete = tk.Button(buttonFrame, text="Delete Task", command=toggle_delete_mode, bg="#ff9999", fg="#000000", activebackground="#ff6666", activeforeground="#000000")
-done = tk.Button(buttonFrame, text="Mark Complete", command=done_item, bg="#99ff99", fg="#000000", activebackground="#66ff66", activeforeground="#000000")
-undone = tk.Button(buttonFrame, text="Undo Mark", command=undone_item, bg="#ffcc99", fg="#000000", activebackground="#ffb366", activeforeground="#000000")
+main.bind('<Control-s>', save_list)
+main.bind('<Control-S>', save_list)
+main.bind('<Return>', add_item)
+myList.bind('<Double-1>', lambda event: toggle_item_status())
 
-add.grid(row=0, column=1, padx=20)
-delete.grid(row=0, column=0)
-done.grid(row=0, column=2)
-undone.grid(row=0, column=3, padx=20)
+entry_var = tk.StringVar()
+myEntry.config(textvariable=entry_var)
+entry_var.trace_add("write", check_entry)
 
-# Run app
+add.config(state=tk.DISABLED)
+header.config(state=tk.DISABLED)
+update_status()
+
 main.mainloop()
-
