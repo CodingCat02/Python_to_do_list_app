@@ -61,17 +61,12 @@ def update_status():
     status_var.set(f" Tasks: {actual_tasks}  |  Pending: {pending}  |  Completed: {completed}")
 
 def add_header():
-    """Add a ToDew-style category header."""
     item_text = myEntry.get().strip()
     if item_text:
-        # Force Uppercase and add ToDew styling
         header_text = f"--- {item_text.upper()} ---"
         myList.insert(tk.END, header_text)
-        
-        # Color the header specifically (Bold Black/Dark)
         last_index = myList.size() - 1
         myList.itemconfig(last_index, fg="#000000")
-        
         update_status()
         mark_modified()
     myEntry.delete(0, tk.END)
@@ -82,7 +77,6 @@ def add_item(event=None):
         formatted_task = f"    {item_text}"
         myList.insert(tk.END, formatted_task)
         myList.itemconfig(tk.END, fg="#464646")
-        
         update_status()
         mark_modified()
     myEntry.delete(0, tk.END)
@@ -91,24 +85,18 @@ def toggle_item_status():
     try:
         index = myList.curselection()[0]
         item_text = myList.get(index)
-        
         if item_text.lstrip().startswith("---"):
             return 
-
         if "✔" in item_text:
-            # Remove the checkmark but keep the 4 spaces
             new_text = item_text.replace("✔ ", "")
             myList.delete(index)
             myList.insert(index, new_text)
             myList.itemconfig(index, fg="#464646")
         else:
-            # Insert the checkmark after the initial indent
-            # Logic: keep the 4 spaces, then add '✔ '
             new_text = item_text.replace("    ", "    ✔ ")
             myList.delete(index)
             myList.insert(index, new_text)
             myList.itemconfig(index, fg="#dedede")
-            
         myList.selection_clear(0, tk.END)
         update_status()
         mark_modified()
@@ -117,22 +105,30 @@ def toggle_item_status():
 
 def exit_delete_mode():
     global delete_mode, cancel_btn
+    main.unbind_all("<MouseWheel>")
+    
+    # Destroy everything except the original Listbox and its scrollbars
     for widget in myFrame.winfo_children():
         if widget not in [myList, y_scroll, x_scroll]:
             widget.destroy()
+            
     if cancel_btn:
         cancel_btn.destroy()
         cancel_btn = None
+        
     myList.grid()
     y_scroll.grid()
     x_scroll.grid()
     delete_mode = False
     delete.config(text="Delete Task", state=tk.NORMAL)
     myEntry.pack(pady=10, before=buttonFrame)
+    
+    # Restore all buttons
     add.grid()
+    header.grid()
     move_up_btn.grid()
     move_down_btn.grid()
-    header.grid()
+    
     update_status()
 
 def toggle_delete_mode():
@@ -140,6 +136,8 @@ def toggle_delete_mode():
     if not delete_mode:
         delete_mode = True
         delete.config(text="Confirm Delete", state=tk.DISABLED)
+        
+        # Hide standard UI
         myEntry.pack_forget()
         add.grid_remove()
         move_up_btn.grid_remove()
@@ -148,37 +146,75 @@ def toggle_delete_mode():
         myList.grid_remove()
         y_scroll.grid_remove()
         x_scroll.grid_remove()
+        
+        # Create Cancel Button
         cancel_btn = tk.Button(buttonFrame, text="Cancel", command=exit_delete_mode, bg="#d3d3d3", fg="#000000")
         cancel_btn.grid(row=0, column=2, padx=10)
+        
+        # 1. Setup Canvas and Scrollbars
         delete_canvas = tk.Canvas(myFrame, bg="SystemButtonFace", highlightthickness=0)
-        delete_scrollbar = tk.Scrollbar(myFrame, orient="vertical", command=delete_canvas.yview)
+        del_scroll_y = tk.Scrollbar(myFrame, orient="vertical", command=delete_canvas.yview)
+        del_scroll_x = tk.Scrollbar(myFrame, orient="horizontal", command=delete_canvas.xview)
+        
         checkbox_frame = tk.Frame(delete_canvas, bg="SystemButtonFace")
-        delete_canvas.configure(yscrollcommand=delete_scrollbar.set)
+        
+        delete_canvas.configure(yscrollcommand=del_scroll_y.set, xscrollcommand=del_scroll_x.set)
+        
+        # 2. Grid Layout for Delete Mode
         delete_canvas.grid(row=0, column=0, sticky="nsew")
-        delete_scrollbar.grid(row=0, column=1, sticky="ns")
+        del_scroll_y.grid(row=0, column=1, sticky="ns")
+        del_scroll_x.grid(row=1, column=0, sticky="ew")
+        
         canvas_window = delete_canvas.create_window((0, 0), window=checkbox_frame, anchor="nw")
+        
         def on_configure(event):
+            # Update scroll region to encompass all content
             delete_canvas.configure(scrollregion=delete_canvas.bbox("all"))
-            delete_canvas.itemconfig(canvas_window, width=event.width)
+            # If the frame is narrower than the canvas, stretch it to fill
+            if checkbox_frame.winfo_reqwidth() < delete_canvas.winfo_width():
+                delete_canvas.itemconfig(canvas_window, width=delete_canvas.winfo_width())
+
         checkbox_frame.bind("<Configure>", on_configure)
+        
+        def _on_mousewheel(event):
+            delete_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        main.bind_all("<MouseWheel>", _on_mousewheel)
+        
         checkboxes = []
+        
+        # 3. SELECT ALL SECTION (Fixed at the top of the frame)
         def update_confirm_button(*args):
             any_checked = any(var.get() for _, var in checkboxes)
             delete.config(state=tk.NORMAL if any_checked else tk.DISABLED)
+            
         select_all_var = tk.BooleanVar()
+        
         def select_all_action():
             for _, var in checkboxes:
                 var.set(select_all_var.get())
             update_confirm_button()
-        tk.Checkbutton(checkbox_frame, text="Select All", variable=select_all_var, font="Helvetica 10 bold", command=select_all_action).pack(fill='x', padx=20)
-        tk.Frame(checkbox_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill='x', pady=5, padx=20)
+
+        # Pack Select All at the very top
+        select_all_cb = tk.Checkbutton(checkbox_frame, text="Select All", variable=select_all_var, 
+                                       font="Helvetica 10 bold", command=select_all_action, bg="SystemButtonFace")
+        select_all_cb.pack(fill='x', padx=20, pady=(10, 0), anchor="w")
+        
+        # Add a visual separator line
+        tk.Frame(checkbox_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill='x', pady=10, padx=20)
+        
+        # 4. TASK LOOP
         for item in myList.get(0, tk.END):
             var = tk.BooleanVar()
             var.trace_add("write", update_confirm_button)
-            cb = tk.Checkbutton(checkbox_frame, text=item, variable=var, font=myFont, anchor="w")
-            cb.pack(fill='x', padx=20)
+            
+            # anchor="w" and wraplength=0 ensures the text doesn't hide or wrap
+            cb = tk.Checkbutton(checkbox_frame, text=item, variable=var, font=myFont, 
+                                anchor="w", bg="SystemButtonFace", wraplength=0, justify=tk.LEFT)
+            cb.pack(fill='x', padx=20, pady=2, anchor="w")
             checkboxes.append((cb, var))
+            
     else:
+        # Confirm Delete Logic
         deleted_anything = False
         for i in range(len(checkboxes) - 1, -1, -1):
             _, var = checkboxes[i]
@@ -220,26 +256,21 @@ def open_list():
         current_file_path = file_path
         with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
-                # We only remove the newline character to keep the leading spaces
                 task = line.rstrip("\n") 
-                if task.strip(): # Only process if there's actual text
+                if task.strip():
                     myList.insert(tk.END, task)
-                    
                     clean_task = task.lstrip() 
-                    
                     if clean_task.startswith("---"):
-                        myList.itemconfig(tk.END, fg="#000000") # Headers stay black
+                        myList.itemconfig(tk.END, fg="#000000")
                     elif clean_task.startswith("✔ "):
-                        myList.itemconfig(tk.END, fg="#dedede") # Completed tasks fade
+                        myList.itemconfig(tk.END, fg="#dedede")
                     else:
-                        myList.itemconfig(tk.END, fg="#464646") # Normal tasks
-        
+                        myList.itemconfig(tk.END, fg="#464646")
         is_modified = False
         update_title()
         update_status()
 
 def delete_list():
-    """Clear all tasks with a confirmation."""
     if myList.size() > 0:
         if messagebox.askyesno("Clear List", "Are you sure you want to delete all tasks?"):
             myList.delete(0, tk.END)
@@ -289,6 +320,7 @@ def move_down():
             mark_modified()
     except IndexError:
         pass
+
 # ============================
 # SECTION - Main Window Setup
 # ============================
@@ -366,7 +398,7 @@ file_menu.add_command(label="Open List", command=open_list)
 file_menu.add_command(label="Save", command=save_list, accelerator="Ctrl+S")
 file_menu.add_command(label="Save As...", command=save_as_list)
 file_menu.add_separator()
-file_menu.add_command(label="Clear List", command=delete_list) # RESTORED HERE
+file_menu.add_command(label="Clear List", command=delete_list)
 
 main.bind('<Control-s>', save_list)
 main.bind('<Control-S>', save_list)
