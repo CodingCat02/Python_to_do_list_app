@@ -85,21 +85,36 @@ def toggle_item_status():
     try:
         index = myList.curselection()[0]
         item_text = myList.get(index)
+
         if item_text.lstrip().startswith("---"):
-            return 
+            return
+        is_urgent = "(Urgent)" in item_text
+
+        bg_color = "#ffb3b3" if is_urgent else "SystemButtonFace"
+
+        # REMOVE CHECK
         if "✔" in item_text:
             new_text = item_text.replace("✔ ", "")
             myList.delete(index)
             myList.insert(index, new_text)
-            myList.itemconfig(index, fg="#464646")
+            myList.itemconfig(
+                index,
+                fg="#464646",
+                bg=bg_color
+            )
         else:
             new_text = item_text.replace("    ", "    ✔ ")
             myList.delete(index)
             myList.insert(index, new_text)
-            myList.itemconfig(index, fg="#dedede")
+            myList.itemconfig(
+                index,
+                fg="#dedede",
+                bg=bg_color
+            )
         myList.selection_clear(0, tk.END)
         update_status()
         mark_modified()
+
     except IndexError:
         pass
 
@@ -128,6 +143,8 @@ def exit_delete_mode():
     header.grid()
     move_up_btn.grid()
     move_down_btn.grid()
+    prioritize_btn.grid()
+    unprioritize_btn.grid()
     
     update_status()
 
@@ -142,6 +159,8 @@ def toggle_delete_mode():
         add.grid_remove()
         move_up_btn.grid_remove()
         move_down_btn.grid_remove()
+        prioritize_btn.grid_remove()
+        unprioritize_btn.grid_remove()
         header.grid_remove()
         myList.grid_remove()
         y_scroll.grid_remove()
@@ -149,7 +168,7 @@ def toggle_delete_mode():
         
         # Create Cancel Button
         cancel_btn = tk.Button(buttonFrame, text="Cancel", command=exit_delete_mode, bg="#d3d3d3", fg="#000000")
-        cancel_btn.grid(row=0, column=2, padx=10)
+        cancel_btn.grid(row=0, column=4, padx=10)
         
         # 1. Setup Canvas and Scrollbars
         delete_canvas = tk.Canvas(myFrame, bg="SystemButtonFace", highlightthickness=0)
@@ -260,12 +279,19 @@ def open_list():
                 if task.strip():
                     myList.insert(tk.END, task)
                     clean_task = task.lstrip() 
+                    last_index = myList.size() - 1
                     if clean_task.startswith("---"):
                         myList.itemconfig(tk.END, fg="#000000")
                     elif clean_task.startswith("✔ "):
-                        myList.itemconfig(tk.END, fg="#dedede")
+                        if "(Urgent)" in task:
+                            myList.itemconfig(last_index, fg="#dedede", bg="#ffb3b3")
+                        else:
+                            myList.itemconfig(last_index, fg="#dedede")
                     else:
-                        myList.itemconfig(tk.END, fg="#464646")
+                        if "(Urgent)" in task:
+                            myList.itemconfig(last_index, fg="#464646", bg="#ffb3b3")
+                        else:
+                            myList.itemconfig(last_index, fg="#464646")
         is_modified = False
         update_title()
         update_status()
@@ -320,7 +346,50 @@ def move_down():
             mark_modified()
     except IndexError:
         pass
+    
+def prioritize_task():
+    try:
+        index = myList.curselection()[0]
+        item_text = myList.get(index)
 
+        if item_text.lstrip().startswith("---"):
+            return
+
+        if "(Urgent)" not in item_text:
+            new_text = item_text + " (Urgent)"
+
+            current_fg = myList.itemcget(index, 'fg')
+
+            myList.delete(index)
+            myList.insert(index, new_text)
+
+            myList.itemconfig(index, bg="#ffb3b3", fg=current_fg)
+
+            myList.selection_set(index)
+            mark_modified()
+
+    except IndexError:
+        pass
+
+def unprioritize_task():
+    try:
+        index = myList.curselection()[0]
+        item_text = myList.get(index)
+
+        new_text = item_text.replace(" (Urgent)", "")
+
+        current_fg = myList.itemcget(index, 'fg')
+
+        myList.delete(index)
+        myList.insert(index, new_text)
+
+        myList.itemconfig(index, bg="SystemButtonFace", fg=current_fg)
+
+        myList.selection_set(index)
+        mark_modified()
+
+    except IndexError:
+        pass
 # ============================
 # SECTION - Main Window Setup
 # ============================
@@ -376,12 +445,17 @@ header = tk.Button(buttonFrame, text="Add As Header", command=add_header, bg="#e
 add = tk.Button(buttonFrame, text="Add Task", command=add_item, bg="#cce6ff", fg="#000000")
 move_up_btn = tk.Button(buttonFrame, text="▲", command=move_up, bg="#f0f0f0", width=2)
 move_down_btn = tk.Button(buttonFrame, text="▼", command=move_down, bg="#f0f0f0", width=2)
+prioritize_btn = tk.Button(buttonFrame, text="Prioritize", command=prioritize_task, bg="#ffb3b3", fg="#000000")
+unprioritize_btn = tk.Button(buttonFrame, text="Unprioritize", command=unprioritize_task, bg="#e0e0e0", fg="#000000")
 
-delete.grid(row=0, column=0, padx=2)
+add.grid(row=0, column=0, padx=2)
 header.grid(row=0, column=1, padx=2)
-add.grid(row=0, column=2, padx=2)
+delete.grid(row=0, column=2, padx=2)
 move_up_btn.grid(row=0, column=3, padx=2)
-move_down_btn.grid(row=0, column=4, padx=2)
+
+move_down_btn.grid(row=2, column=3, padx=2, pady=3)
+prioritize_btn.grid(row=2, column=0, padx=2, pady=3)
+unprioritize_btn.grid(row=2, column=2, padx=2, pady=3)
 
 status_var = tk.StringVar()
 status_bar = tk.Label(main, textvariable=status_var, bd=1, relief=tk.SUNKEN, anchor=tk.W, font="Helvetica 9 italic", pady=2)
