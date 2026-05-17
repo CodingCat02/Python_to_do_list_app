@@ -22,7 +22,7 @@ delete_mode = False
 checkbox_frame = None
 current_file_path = None
 is_modified = False
-cancel_btn = None 
+cancel_btn = None
 
 # ============================
 # SECTION - Functions
@@ -64,7 +64,8 @@ def add_header():
     item_text = myEntry.get().strip()
     if item_text:
         header_text = f"--- {item_text.upper()} ---"
-        myList.insert(tk.END, header_text)
+        # myList.insert(tk.END, header_text)
+        myList.insert(0, header_text)
         last_index = myList.size() - 1
         myList.itemconfig(last_index, fg="#000000")
         update_status()
@@ -75,8 +76,17 @@ def add_item(event=None):
     item_text = myEntry.get().strip()
     if item_text:
         formatted_task = f"    {item_text}"
-        myList.insert(tk.END, formatted_task)
-        myList.itemconfig(tk.END, fg="#464646")
+        
+        target_index = 0
+        while target_index < myList.size():
+            current_item = myList.get(target_index)
+            if "---" in current_item:
+                target_index += 1
+            else:
+                break
+        
+        myList.insert(target_index, formatted_task)
+        myList.itemconfig(target_index, fg="#464646")
         update_status()
         mark_modified()
     myEntry.delete(0, tk.END)
